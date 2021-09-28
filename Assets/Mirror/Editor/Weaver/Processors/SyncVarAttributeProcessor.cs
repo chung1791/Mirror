@@ -215,24 +215,6 @@ namespace Mirror.Weaver
             worker.Emit(OpCodes.Ldfld, fd);
             worker.Emit(OpCodes.Stloc, oldValue);
 
-            // make generic instance of SyncVar<T> type for the type of 'value'
-            TypeReference syncVarT_ForValue = weaverTypes.SyncVarT_Type.MakeGenericInstanceType(fd.FieldType);
-
-            // SyncVar<T> test = new SyncVar<T>(value);
-            Log.Warning("[SyncVar] " + fd.Name + " type=" + fd.FieldType + " SyncVar<type> = " + syncVarT_ForValue);
-            VariableDefinition testSyncVar_T = new VariableDefinition(syncVarT_ForValue);
-            set.Body.Variables.Add(testSyncVar_T);
-            worker.Emit(OpCodes.Ldarg_0);   // 'this'
-            worker.Emit(OpCodes.Ldfld, fd); // value = fd
-            worker.Emit(OpCodes.Ldnull);    // hook = null
-            // make generic ctor for SyncVar<T> for the target type SyncVar<T> with type of 'value'
-            GenericInstanceType syncVarT_GenericInstanceType = (GenericInstanceType)syncVarT_ForValue;
-            MethodReference syncVarT_Ctor_ForValue = weaverTypes.SyncVarT_GenericConstructor.MakeHostInstanceGeneric(assembly.MainModule, syncVarT_GenericInstanceType);
-            worker.Emit(OpCodes.Newobj, syncVarT_Ctor_ForValue);
-
-            // store result in our test variable
-            worker.Emit(OpCodes.Stloc, testSyncVar_T);
-
             // this
             worker.Emit(OpCodes.Ldarg_0);
 
