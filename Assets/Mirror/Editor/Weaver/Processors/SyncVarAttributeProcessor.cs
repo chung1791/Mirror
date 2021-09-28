@@ -18,6 +18,8 @@ namespace Mirror.Weaver
         SyncVarAccessLists syncVarAccessLists;
         Logger Log;
 
+        // SyncVar<T> added
+
         string HookParameterMessage(string hookName, TypeReference ValueType) =>
             $"void {hookName}({ValueType} oldValue, {ValueType} newValue)";
 
@@ -308,8 +310,9 @@ namespace Mirror.Weaver
 
         // ProcessSyncVar is called while iterating td.Fields.
         // can't add to it while iterating.
-        // new fields are added to 'addedFields'
-        public void ProcessSyncVar(TypeDefinition td, FieldDefinition fd, Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds, long dirtyBit, List<FieldDefinition> addedFields, ref bool WeavingFailed)
+        // new SyncVar<T> fields are added to 'addedSyncVarTs' with
+        //   <SyncVar<T>, [SyncVar] original>
+        public void ProcessSyncVar(TypeDefinition td, FieldDefinition fd, Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds, long dirtyBit, Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs, ref bool WeavingFailed)
         {
             string originalName = fd.Name;
 
@@ -339,12 +342,7 @@ namespace Mirror.Weaver
             FieldDefinition syncVarTField = new FieldDefinition($"___{fd.Name}SyncVarT", FieldAttributes.Public, syncVarT_ForValue);
             // TODO ctor
             //syncVarTField.InitialValue = fd.InitialValue;
-            addedFields.Add(syncVarTField);
-
-            // try test field with initial  value
-            FieldDefinition test = new FieldDefinition($"__{fd.Name}TEST", FieldAttributes.Public, fd.FieldType);
-            test.InitialValue = fd.InitialValue;
-            addedFields.Add(test);
+            addedSyncVarTs[syncVarTField] = fd;
 
             MethodDefinition get = GenerateSyncVarGetter(fd, originalName, netIdField);
             MethodDefinition set = GenerateSyncVarSetter(td, fd, originalName, dirtyBit, netIdField, ref WeavingFailed);
@@ -373,7 +371,7 @@ namespace Mirror.Weaver
             }
         }
 
-        public (List<FieldDefinition> syncVars, Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds) ProcessSyncVars(TypeDefinition td, ref bool WeavingFailed)
+        public (List<FieldDefinition> syncVars, Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds) ProcessSyncVars(TypeDefinition td, Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs, ref bool WeavingFailed)
         {
             List<FieldDefinition> syncVars = new List<FieldDefinition>();
             Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds = new Dictionary<FieldDefinition, FieldDefinition>();
@@ -381,10 +379,6 @@ namespace Mirror.Weaver
             // the mapping of dirtybits to sync-vars is implicit in the order of the fields here. this order is recorded in m_replacementProperties.
             // start assigning syncvars at the place the base class stopped, if any
             int dirtyBitCounter = syncVarAccessLists.GetSyncVarStart(td.BaseType.FullName);
-
-            // separate list for added fields.
-            // can't add while we iterate 'td.Fields' otherwise.
-            List<FieldDefinition> addedFields = new List<FieldDefinition>();
 
             // find syncvars
             foreach (FieldDefinition fd in td.Fields)
@@ -413,7 +407,7 @@ namespace Mirror.Weaver
                     {
                         syncVars.Add(fd);
 
-                        ProcessSyncVar(td, fd, syncVarNetIds, 1L << dirtyBitCounter, addedFields, ref WeavingFailed);
+                        ProcessSyncVar(td, fd, syncVarNetIds, 1L << dirtyBitCounter, addedSyncVarTs, ref WeavingFailed);
                         dirtyBitCounter += 1;
 
                         if (dirtyBitCounter > SyncVarLimit)
@@ -426,8 +420,8 @@ namespace Mirror.Weaver
                 }
             }
 
-            // add all added fields
-            foreach (FieldDefinition fd in addedFields)
+            // add all added SyncVar<T>s
+            foreach (FieldDefinition fd in addedSyncVarTs.Keys)
             {
                 td.Fields.Add(fd);
             }
@@ -440,6 +434,35 @@ namespace Mirror.Weaver
             syncVarAccessLists.SetNumSyncVars(td.FullName, syncVars.Count);
 
             return (syncVars, syncVarNetIds);
+        }
+
+        // inject initialization code for SyncVar<T> from [SyncVar] into ctor
+        // called from NetworkBehaviourProcessor.InjectIntoInstanceConstructor()
+        public static void InjectSyncVarT_Initialization(AssemblyDefinition assembly, ILProcessor ctorWorker, FieldDefinition syncVarT, FieldDefinition originalSyncVar, WeaverTypes weaverTypes, Logger Log)
+        {
+            // make generic instance of SyncVar<T> type for the type of 'value'
+            //TypeReference syncVarT_ForValue = weaverTypes.SyncVarT_Type.MakeGenericInstanceType(originalSyncVar.FieldType);
+
+            // SyncVar<T> member = new SyncVar<T>(originalValue);
+            //Log.Warning("[SyncVar] " + fd.Name + " type=" + fd.FieldType + " SyncVar<type> = " + syncVarT_ForValue);
+
+            // new SyncVar<T>(originalValue)
+            /*ctorWorker.Emit(OpCodes.Ldarg_0);   // 'this'
+            ctorWorker.Emit(OpCodes.Ldfld, originalSyncVar); // value = original [SyncVar] field
+            ctorWorker.Emit(OpCodes.Ldnull);    // hook = null for now
+            // make generic ctor for SyncVar<T> for the target type SyncVar<T> with type of 'value'
+            GenericInstanceType syncVarT_GenericInstanceType = (GenericInstanceType)syncVarT_ForValue;
+            MethodReference syncVarT_Ctor_ForValue = weaverTypes.SyncVarT_GenericConstructor.MakeHostInstanceGeneric(assembly.MainModule, syncVarT_GenericInstanceType);
+            ctorWorker.Emit(OpCodes.Newobj, syncVarT_Ctor_ForValue);
+
+            // store it in the SyncVar<T> member
+            ctorWorker.Emit(OpCodes.Ldarg_0);
+            ctorWorker.Emit(OpCodes.Stfld, syncVarT);*/
+
+            // this.SyncVar<T> member = null
+            ctorWorker.Emit(OpCodes.Ldarg_0); // this
+            ctorWorker.Emit(OpCodes.Ldnull);  // null
+            ctorWorker.Emit(OpCodes.Stfld, syncVarT); // member = ...
         }
 
         public void WriteCallHookMethodUsingArgument(ILProcessor worker, MethodDefinition hookMethod, VariableDefinition oldValue)

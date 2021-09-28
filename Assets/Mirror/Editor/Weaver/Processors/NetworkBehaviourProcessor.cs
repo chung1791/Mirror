@@ -78,8 +78,12 @@ namespace Mirror.Weaver
             }
             MarkAsProcessed(netBehaviourSubclass);
 
+            // remember added SyncVar<T> with original [SyncVar] fields.
+            // so we can initialize them in constructor later.
+            Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs = new Dictionary<FieldDefinition, FieldDefinition>();
+
             // deconstruct tuple and set fields
-            (syncVars, syncVarNetIds) = syncVarAttributeProcessor.ProcessSyncVars(netBehaviourSubclass, ref WeavingFailed);
+            (syncVars, syncVarNetIds) = syncVarAttributeProcessor.ProcessSyncVars(netBehaviourSubclass, addedSyncVarTs, ref WeavingFailed);
 
             syncObjects = SyncObjectProcessor.FindSyncObjectsFields(writers, readers, Log, netBehaviourSubclass, ref WeavingFailed);
 
@@ -93,7 +97,7 @@ namespace Mirror.Weaver
 
             // inject initializations into static & instance constructor
             InjectIntoStaticConstructor(ref WeavingFailed);
-            InjectIntoInstanceConstructor(ref WeavingFailed);
+            InjectIntoInstanceConstructor(addedSyncVarTs, ref WeavingFailed);
 
             GenerateSerialization(ref WeavingFailed);
             if (WeavingFailed)
@@ -318,7 +322,7 @@ namespace Mirror.Weaver
         }
 
         // we need to inject several initializations into NetworkBehaviour ctor
-        void InjectIntoInstanceConstructor(ref bool WeavingFailed)
+        void InjectIntoInstanceConstructor(Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs, ref bool WeavingFailed)
         {
             if (syncObjects.Count == 0)
                 return;
@@ -341,6 +345,14 @@ namespace Mirror.Weaver
             }
 
             ILProcessor ctorWorker = ctor.Body.GetILProcessor();
+
+            // initialize all SyncVar<T> from the [SyncVar] original values inc tor
+            // BEFORE initializing sync objects so they aren't null anymore.
+            foreach (KeyValuePair<FieldDefinition, FieldDefinition> kvp in addedSyncVarTs)
+            {
+                //Log.Warning("initialiazing SyncVar<T> into ctor: " + netBehaviourSubclass.Name + "." + kvp.Key.Name + " := " + kvp.Value.Name);
+                SyncVarAttributeProcessor.InjectSyncVarT_Initialization(assembly, ctorWorker, kvp.Key, kvp.Value, weaverTypes, Log);
+            }
 
             // initialize all sync objects in ctor
             foreach (FieldDefinition fd in syncObjects)
