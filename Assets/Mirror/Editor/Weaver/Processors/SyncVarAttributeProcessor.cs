@@ -438,6 +438,7 @@ namespace Mirror.Weaver
 
         // inject initialization code for SyncVar<T> from [SyncVar] into ctor
         // called from NetworkBehaviourProcessor.InjectIntoInstanceConstructor()
+        // see also: https://groups.google.com/g/mono-cecil/c/JCLRPxOym4A?pli=1
         public static void InjectSyncVarT_Initialization(AssemblyDefinition assembly, ILProcessor ctorWorker, FieldDefinition syncVarT, FieldDefinition originalSyncVar, WeaverTypes weaverTypes, Logger Log)
         {
             // make generic instance of SyncVar<T> type for the type of 'value'
