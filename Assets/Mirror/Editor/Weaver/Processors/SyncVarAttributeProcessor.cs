@@ -477,6 +477,11 @@ namespace Mirror.Weaver
 
             // store result in our test variable
             ctorWorker.Emit(OpCodes.Stloc, testSyncVar_T);
+
+            // move test variable into original field
+            ctorWorker.Emit(OpCodes.Ldarg_0);
+            ctorWorker.Emit(OpCodes.Ldloc, testSyncVar_T);
+            ctorWorker.Emit(OpCodes.Stfld, syncVarT);
         }
 
         public void WriteCallHookMethodUsingArgument(ILProcessor worker, MethodDefinition hookMethod, VariableDefinition oldValue)
