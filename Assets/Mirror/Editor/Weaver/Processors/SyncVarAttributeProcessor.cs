@@ -438,7 +438,7 @@ namespace Mirror.Weaver
 
         // inject initialization code for SyncVar<T> from [SyncVar] into ctor
         // called from NetworkBehaviourProcessor.InjectIntoInstanceConstructor()
-        public static void InjectSyncVarT_Initialization(AssemblyDefinition assembly, ILProcessor ctorWorker, FieldDefinition syncVarT, FieldDefinition originalSyncVar, WeaverTypes weaverTypes, Logger Log)
+        public static void InjectSyncVarT_Initialization(AssemblyDefinition assembly, MethodDefinition ctor, ILProcessor ctorWorker, FieldDefinition syncVarT, FieldDefinition originalSyncVar, WeaverTypes weaverTypes, Logger Log)
         {
             // make generic instance of SyncVar<T> type for the type of 'value'
             //TypeReference syncVarT_ForValue = weaverTypes.SyncVarT_Type.MakeGenericInstanceType(originalSyncVar.FieldType);
@@ -460,9 +460,23 @@ namespace Mirror.Weaver
             ctorWorker.Emit(OpCodes.Stfld, syncVarT);*/
 
             // this.SyncVar<T> member = null
-            ctorWorker.Emit(OpCodes.Ldarg_0); // this
-            ctorWorker.Emit(OpCodes.Ldnull);  // null
-            ctorWorker.Emit(OpCodes.Stfld, syncVarT); // member = ...
+            // make generic instance of SyncVar<T> type for the type of 'value'
+            TypeReference syncVarT_ForValue = weaverTypes.SyncVarT_Type.MakeGenericInstanceType(originalSyncVar.FieldType);
+
+            // SyncVar<T> test = new SyncVar<T>(value);
+            //Log.Warning("[SyncVar] " + fd.Name + " type=" + fd.FieldType + " SyncVar<type> = " + syncVarT_ForValue);
+            VariableDefinition testSyncVar_T = new VariableDefinition(syncVarT_ForValue);
+            ctor.Body.Variables.Add(testSyncVar_T);
+            ctorWorker.Emit(OpCodes.Ldarg_0);   // 'this'
+            ctorWorker.Emit(OpCodes.Ldfld, originalSyncVar); // value = fd
+            ctorWorker.Emit(OpCodes.Ldnull);    // hook = null
+            // make generic ctor for SyncVar<T> for the target type SyncVar<T> with type of 'value'
+            GenericInstanceType syncVarT_GenericInstanceType = (GenericInstanceType)syncVarT_ForValue;
+            MethodReference syncVarT_Ctor_ForValue = weaverTypes.SyncVarT_GenericConstructor.MakeHostInstanceGeneric(assembly.MainModule, syncVarT_GenericInstanceType);
+            ctorWorker.Emit(OpCodes.Newobj, syncVarT_Ctor_ForValue);
+
+            // store result in our test variable
+            ctorWorker.Emit(OpCodes.Stloc, testSyncVar_T);
         }
 
         public void WriteCallHookMethodUsingArgument(ILProcessor worker, MethodDefinition hookMethod, VariableDefinition oldValue)

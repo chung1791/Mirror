@@ -351,7 +351,7 @@ namespace Mirror.Weaver
             foreach (KeyValuePair<FieldDefinition, FieldDefinition> kvp in addedSyncVarTs)
             {
                 //Log.Warning("initialiazing SyncVar<T> into ctor: " + netBehaviourSubclass.Name + "." + kvp.Key.Name + " := " + kvp.Value.Name);
-                SyncVarAttributeProcessor.InjectSyncVarT_Initialization(assembly, ctorWorker, kvp.Key, kvp.Value, weaverTypes, Log);
+                SyncVarAttributeProcessor.InjectSyncVarT_Initialization(assembly, ctor, ctorWorker, kvp.Key, kvp.Value, weaverTypes, Log);
             }
 
             // initialize all sync objects in ctor
