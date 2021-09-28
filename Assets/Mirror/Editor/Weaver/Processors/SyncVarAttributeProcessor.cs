@@ -438,20 +438,18 @@ namespace Mirror.Weaver
 
         // inject initialization code for SyncVar<T> from [SyncVar] into ctor
         // called from NetworkBehaviourProcessor.InjectIntoInstanceConstructor()
-        public static void InjectSyncVarT_Initialization(AssemblyDefinition assembly, MethodDefinition ctor, ILProcessor ctorWorker, FieldDefinition syncVarT, FieldDefinition originalSyncVar, WeaverTypes weaverTypes, Logger Log)
+        public static void InjectSyncVarT_Initialization(AssemblyDefinition assembly, ILProcessor ctorWorker, FieldDefinition syncVarT, FieldDefinition originalSyncVar, WeaverTypes weaverTypes, Logger Log)
         {
-            // this.SyncVar<T> member = null
             // make generic instance of SyncVar<T> type for the type of 'value'
             TypeReference syncVarT_ForValue = weaverTypes.SyncVarT_Type.MakeGenericInstanceType(originalSyncVar.FieldType);
 
             // final 'StFld syncVarT' needs 'this.' in front
             ctorWorker.Emit(OpCodes.Ldarg_0);
 
-            // SyncVar<T> test = new SyncVar<T>(value);
-            //Log.Warning("[SyncVar] " + fd.Name + " type=" + fd.FieldType + " SyncVar<type> = " + syncVarT_ForValue);
-            ctorWorker.Emit(OpCodes.Ldarg_0);   // 'this'
-            ctorWorker.Emit(OpCodes.Ldfld, originalSyncVar); // value = fd
-            ctorWorker.Emit(OpCodes.Ldnull);    // hook = null
+            // push 'new SyncVar<T>(value)' on stack
+            ctorWorker.Emit(OpCodes.Ldarg_0);                // 'this' for this.originalSyncVar
+            ctorWorker.Emit(OpCodes.Ldfld, originalSyncVar); // value = originalSyncVar
+            ctorWorker.Emit(OpCodes.Ldnull);                 // hook = null
             // make generic ctor for SyncVar<T> for the target type SyncVar<T> with type of 'value'
             GenericInstanceType syncVarT_GenericInstanceType = (GenericInstanceType)syncVarT_ForValue;
             MethodReference syncVarT_Ctor_ForValue = weaverTypes.SyncVarT_GenericConstructor.MakeHostInstanceGeneric(assembly.MainModule, syncVarT_GenericInstanceType);
