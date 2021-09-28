@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Mono.CecilX;
 using Mono.CecilX.Cil;
+using Mono.CecilX.Rocks;
 
 namespace Mirror.Weaver
 {
@@ -214,6 +215,24 @@ namespace Mirror.Weaver
             worker.Emit(OpCodes.Ldfld, fd);
             worker.Emit(OpCodes.Stloc, oldValue);
 
+            // make generic instance of SyncVar<T> type for the type of 'value'
+            TypeReference syncVarT_ForValue = weaverTypes.SyncVarT_Type.MakeGenericInstanceType(fd.FieldType);
+
+            // SyncVar<T> test = new SyncVar<T>(value);
+            Log.Warning("[SyncVar] " + fd.Name + " type=" + fd.FieldType + " SyncVar<type> = " + syncVarT_ForValue);
+            VariableDefinition testSyncVar_T = new VariableDefinition(syncVarT_ForValue);
+            set.Body.Variables.Add(testSyncVar_T);
+            worker.Emit(OpCodes.Ldarg_0);   // 'this'
+            worker.Emit(OpCodes.Ldfld, fd); // value = fd
+            worker.Emit(OpCodes.Ldnull);    // hook = null
+            // make generic ctor for SyncVar<T> for the target type SyncVar<T> with type of 'value'
+            GenericInstanceType syncVarT_GenericInstanceType = (GenericInstanceType)syncVarT_ForValue;
+            MethodReference syncVarT_Ctor_ForValue = weaverTypes.SyncVarT_GenericConstructor.MakeHostInstanceGeneric(assembly.MainModule, syncVarT_GenericInstanceType);
+            worker.Emit(OpCodes.Newobj, syncVarT_Ctor_ForValue);
+
+            // store result in our test variable
+            worker.Emit(OpCodes.Stloc, testSyncVar_T);
+
             // this
             worker.Emit(OpCodes.Ldarg_0);
 
@@ -305,7 +324,10 @@ namespace Mirror.Weaver
             return set;
         }
 
-        public void ProcessSyncVar(TypeDefinition td, FieldDefinition fd, Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds, long dirtyBit, ref bool WeavingFailed)
+        // ProcessSyncVar is called while iterating td.Fields.
+        // can't add to it while iterating.
+        // new fields are added to 'addedFields'
+        public void ProcessSyncVar(TypeDefinition td, FieldDefinition fd, Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds, long dirtyBit, List<FieldDefinition> addedFields, ref bool WeavingFailed)
         {
             string originalName = fd.Name;
 
@@ -328,6 +350,19 @@ namespace Mirror.Weaver
 
                 syncVarNetIds[fd] = netIdField;
             }
+
+
+            // make generic instance of SyncVar<T> type for the type of 'value'
+            TypeReference syncVarT_ForValue = weaverTypes.SyncVarT_Type.MakeGenericInstanceType(fd.FieldType);
+            FieldDefinition syncVarTField = new FieldDefinition($"___{fd.Name}SyncVarT", FieldAttributes.Public, syncVarT_ForValue);
+            // TODO ctor
+            //syncVarTField.InitialValue = fd.InitialValue;
+            addedFields.Add(syncVarTField);
+
+            // try test field with initial  value
+            FieldDefinition test = new FieldDefinition($"__{fd.Name}TEST", FieldAttributes.Public, fd.FieldType);
+            test.InitialValue = fd.InitialValue;
+            addedFields.Add(test);
 
             MethodDefinition get = GenerateSyncVarGetter(fd, originalName, netIdField);
             MethodDefinition set = GenerateSyncVarSetter(td, fd, originalName, dirtyBit, netIdField, ref WeavingFailed);
@@ -365,6 +400,10 @@ namespace Mirror.Weaver
             // start assigning syncvars at the place the base class stopped, if any
             int dirtyBitCounter = syncVarAccessLists.GetSyncVarStart(td.BaseType.FullName);
 
+            // separate list for added fields.
+            // can't add while we iterate 'td.Fields' otherwise.
+            List<FieldDefinition> addedFields = new List<FieldDefinition>();
+
             // find syncvars
             foreach (FieldDefinition fd in td.Fields)
             {
@@ -392,7 +431,7 @@ namespace Mirror.Weaver
                     {
                         syncVars.Add(fd);
 
-                        ProcessSyncVar(td, fd, syncVarNetIds, 1L << dirtyBitCounter, ref WeavingFailed);
+                        ProcessSyncVar(td, fd, syncVarNetIds, 1L << dirtyBitCounter, addedFields, ref WeavingFailed);
                         dirtyBitCounter += 1;
 
                         if (dirtyBitCounter > SyncVarLimit)
@@ -403,6 +442,12 @@ namespace Mirror.Weaver
                         }
                     }
                 }
+            }
+
+            // add all added fields
+            foreach (FieldDefinition fd in addedFields)
+            {
+                td.Fields.Add(fd);
             }
 
             // add all the new SyncVar __netId fields
