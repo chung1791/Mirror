@@ -351,7 +351,7 @@ namespace Mirror.Weaver
             foreach (KeyValuePair<FieldDefinition, FieldDefinition> kvp in addedSyncVarTs)
             {
                 //Log.Warning("initialiazing SyncVar<T> into ctor: " + netBehaviourSubclass.Name + "." + kvp.Key.Name + " := " + kvp.Value.Name);
-                SyncVarAttributeProcessor.InjectSyncVarT_Initialization(assembly, ctorWorker, kvp.Key, kvp.Value, weaverTypes, Log);
+                SyncVarAttributeProcessor.InjectSyncVarT_Initialization(assembly, ctorWorker, netBehaviourSubclass, kvp.Key, kvp.Value, weaverTypes, Log, ref WeavingFailed);
             }
 
             // initialize all sync objects in ctor
@@ -544,7 +544,7 @@ namespace Mirror.Weaver
         void DeserializeField(FieldDefinition syncVar, ILProcessor worker, MethodDefinition deserialize, ref bool WeavingFailed)
         {
             // check for Hook function
-            MethodDefinition hookMethod = syncVarAttributeProcessor.GetHookMethod(netBehaviourSubclass, syncVar, ref WeavingFailed);
+            MethodDefinition hookMethod = SyncVarAttributeProcessor.GetHookMethod(netBehaviourSubclass, syncVar, Log, ref WeavingFailed);
 
             if (syncVar.FieldType.IsDerivedFrom<NetworkBehaviour>())
             {

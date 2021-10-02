@@ -20,7 +20,7 @@ namespace Mirror.Weaver
 
         // SyncVar<T> added
 
-        string HookParameterMessage(string hookName, TypeReference ValueType) =>
+        static string HookParameterMessage(string hookName, TypeReference ValueType) =>
             $"void {hookName}({ValueType} oldValue, {ValueType} newValue)";
 
         public SyncVarAttributeProcessor(AssemblyDefinition assembly, WeaverTypes weaverTypes, SyncVarAccessLists syncVarAccessLists, Logger Log)
@@ -32,7 +32,7 @@ namespace Mirror.Weaver
         }
 
         // Get hook method if any
-        public MethodDefinition GetHookMethod(TypeDefinition td, FieldDefinition syncVar, ref bool WeavingFailed)
+        public static MethodDefinition GetHookMethod(TypeDefinition td, FieldDefinition syncVar, Logger Log, ref bool WeavingFailed)
         {
             CustomAttribute syncVarAttr = syncVar.GetCustomAttribute<SyncVarAttribute>();
 
@@ -44,10 +44,10 @@ namespace Mirror.Weaver
             if (hookFunctionName == null)
                 return null;
 
-            return FindHookMethod(td, syncVar, hookFunctionName, ref WeavingFailed);
+            return FindHookMethod(td, syncVar, hookFunctionName, Log, ref WeavingFailed);
         }
 
-        MethodDefinition FindHookMethod(TypeDefinition td, FieldDefinition syncVar, string hookFunctionName, ref bool WeavingFailed)
+        static MethodDefinition FindHookMethod(TypeDefinition td, FieldDefinition syncVar, string hookFunctionName, Logger Log, ref bool WeavingFailed)
         {
             List<MethodDefinition> methods = td.GetMethods(hookFunctionName);
 
@@ -79,7 +79,7 @@ namespace Mirror.Weaver
             return null;
         }
 
-        bool MatchesParameters(FieldDefinition syncVar, MethodDefinition method)
+        static bool MatchesParameters(FieldDefinition syncVar, MethodDefinition method)
         {
             // matches void onValueChange(T oldValue, T newValue)
             return method.Parameters[0].ParameterType.FullName == syncVar.FieldType.FullName &&
@@ -266,7 +266,7 @@ namespace Mirror.Weaver
                 worker.Emit(OpCodes.Call, gm);
             }
 
-            MethodDefinition hookMethod = GetHookMethod(td, fd, ref WeavingFailed);
+            MethodDefinition hookMethod = GetHookMethod(td, fd, Log, ref WeavingFailed);
 
             if (hookMethod != null)
             {
@@ -437,8 +437,44 @@ namespace Mirror.Weaver
         // inject initialization code for SyncVar<T> from [SyncVar] into ctor
         // called from NetworkBehaviourProcessor.InjectIntoInstanceConstructor()
         // see also: https://groups.google.com/g/mono-cecil/c/JCLRPxOym4A?pli=1
-        public static void InjectSyncVarT_Initialization(AssemblyDefinition assembly, ILProcessor ctorWorker, FieldDefinition syncVarT, FieldDefinition originalSyncVar, WeaverTypes weaverTypes, Logger Log)
+        public static void InjectSyncVarT_Initialization(AssemblyDefinition assembly, ILProcessor ctorWorker, TypeDefinition td, FieldDefinition syncVarT, FieldDefinition originalSyncVar, WeaverTypes weaverTypes, Logger Log, ref bool WeavingFailed)
         {
+            // find hook method in original [SyncVar] (if any)
+
+            MethodDefinition hookMethod = GetHookMethod(td, originalSyncVar, Log, ref WeavingFailed);
+            if (hookMethod != null)
+            {
+                Log.Warning($"{originalSyncVar.Name} has hook {hookMethod.Name}");
+                /*
+                //if (NetworkServer.localClientActive && !getSyncVarHookGuard(dirtyBit))
+                Instruction label = worker.Create(OpCodes.Nop);
+                worker.Emit(OpCodes.Call, weaverTypes.NetworkServerGetLocalClientActive);
+                worker.Emit(OpCodes.Brfalse, label);
+                worker.Emit(OpCodes.Ldarg_0);
+                worker.Emit(OpCodes.Ldc_I8, dirtyBit);
+                worker.Emit(OpCodes.Call, weaverTypes.getSyncVarHookGuard);
+                worker.Emit(OpCodes.Brtrue, label);
+
+                // setSyncVarHookGuard(dirtyBit, true);
+                worker.Emit(OpCodes.Ldarg_0);
+                worker.Emit(OpCodes.Ldc_I8, dirtyBit);
+                worker.Emit(OpCodes.Ldc_I4_1);
+                worker.Emit(OpCodes.Call, weaverTypes.setSyncVarHookGuard);
+
+                // call hook (oldValue, newValue)
+                // Generates: OnValueChanged(oldValue, value);
+                WriteCallHookMethodUsingArgument(worker, hookMethod, oldValue);
+
+                // setSyncVarHookGuard(dirtyBit, false);
+                worker.Emit(OpCodes.Ldarg_0);
+                worker.Emit(OpCodes.Ldc_I8, dirtyBit);
+                worker.Emit(OpCodes.Ldc_I4_0);
+                worker.Emit(OpCodes.Call, weaverTypes.setSyncVarHookGuard);
+
+                worker.Append(label);
+                */
+            }
+
             // make generic instance of SyncVar<T> type for the type of 'value'
             TypeReference syncVarT_ForValue = weaverTypes.SyncVarT_Type.MakeGenericInstanceType(originalSyncVar.FieldType);
 
