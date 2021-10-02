@@ -276,16 +276,10 @@ namespace Mirror.Weaver
             td.Methods.Add(get);
             td.Methods.Add(set);
             td.Properties.Add(propertyDefinition);
-            syncVarAccessLists.replacementSetterProperties[fd] = set;
 
-            // replace getter field if GameObject/NetworkIdentity so it uses
-            // netId instead
-            // -> only for GameObjects, otherwise an int syncvar's getter would
-            //    end up in recursion.
-            if (fd.FieldType.IsNetworkIdentityField())
-            {
-                syncVarAccessLists.replacementGetterProperties[fd] = get;
-            }
+            // add getter/setter to replacement lists
+            syncVarAccessLists.replacementSetterProperties[fd] = set;
+            syncVarAccessLists.replacementGetterProperties[fd] = get;
         }
 
         public (List<FieldDefinition> syncVars, Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds) ProcessSyncVars(TypeDefinition td, Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs, ref bool WeavingFailed)
