@@ -165,7 +165,7 @@ namespace Mirror.Weaver
             return get;
         }
 
-        public MethodDefinition GenerateSyncVarSetter(TypeDefinition originalSyncVar, FieldDefinition fd, string originalName, long dirtyBit, FieldDefinition netFieldId, ref bool WeavingFailed)
+        public MethodDefinition GenerateSyncVarSetter(FieldDefinition syncVarT, TypeReference syncVarT_ForValue, TypeDefinition originalSyncVar, FieldDefinition fd, string originalName, long dirtyBit, FieldDefinition netFieldId, ref bool WeavingFailed)
         {
             //Create the set method
             MethodDefinition set = new MethodDefinition($"set_Network{originalName}", MethodAttributes.Public |
@@ -174,27 +174,6 @@ namespace Mirror.Weaver
                     weaverTypes.Import(typeof(void)));
 
             ILProcessor worker = set.Body.GetILProcessor();
-
-            // new value to set
-            worker.Emit(OpCodes.Ldarg_1);
-
-            // T oldValue = value;
-            // TODO for GO/NI we need to backup the netId don't we?
-            VariableDefinition oldValue = new VariableDefinition(fd.FieldType);
-            set.Body.Variables.Add(oldValue);
-            worker.Emit(OpCodes.Ldarg_0);
-            worker.Emit(OpCodes.Ldfld, fd);
-            worker.Emit(OpCodes.Stloc, oldValue);
-
-            // this
-            worker.Emit(OpCodes.Ldarg_0);
-
-            // new value to set
-            worker.Emit(OpCodes.Ldarg_1);
-
-            // this.SyncVar<T>
-            worker.Emit(OpCodes.Ldarg_0);
-            worker.Emit(OpCodes.Ldflda, fd);
 
             /*if (fd.FieldType.Is<UnityEngine.GameObject>())
             {
@@ -223,12 +202,21 @@ namespace Mirror.Weaver
             }
             else*/
             {
-                // make generic version of SetSyncVar with field type
-                GenericInstanceMethod gm = new GenericInstanceMethod(weaverTypes.setSyncVarReference);
-                gm.GenericArguments.Add(fd.FieldType);
+                // make generic instance for SyncVar<T>.Value setter
+                // so we have SyncVar<int>.Value etc.
+                GenericInstanceType syncVarT_Value_GenericInstanceType = (GenericInstanceType)syncVarT_ForValue;
+                MethodReference syncVarT_Value_Set_ForValue = weaverTypes.SyncVarT_Value_Set_Reference.MakeHostInstanceGeneric(assembly.MainModule, syncVarT_Value_GenericInstanceType);
 
-                // call SyncVar<T>.Value setter
-                worker.Emit(OpCodes.Call, gm);
+                // when doing this.SyncVar<T>.Value = ... manually, this is the
+                // generated IL:
+                //   IL_0000: ldarg.0
+                //   IL_0001: ldfld class [Mirror]Mirror.SyncVar`1<int32> Mirror.Examples.Tanks.Test::exampleT
+                //   IL_0006: ldarg.1
+                //   IL_0007: callvirt instance void class [Mirror]Mirror.SyncVar`1<int32>::set_Value(!0)
+                worker.Emit(OpCodes.Ldarg_0); // 'this.'
+                worker.Emit(OpCodes.Ldfld, syncVarT);
+                worker.Emit(OpCodes.Ldarg_1); // 'value' from setter
+                worker.Emit(OpCodes.Callvirt, syncVarT_Value_Set_ForValue);
             }
 
             worker.Emit(OpCodes.Ret);
@@ -274,7 +262,7 @@ namespace Mirror.Weaver
             addedSyncVarTs[syncVarTField] = fd;
 
             MethodDefinition get = GenerateSyncVarGetter(syncVarTField, syncVarT_ForValue, fd, originalName, netIdField);
-            MethodDefinition set = GenerateSyncVarSetter(td, fd, originalName, dirtyBit, netIdField, ref WeavingFailed);
+            MethodDefinition set = GenerateSyncVarSetter(syncVarTField, syncVarT_ForValue, td, fd, originalName, dirtyBit, netIdField, ref WeavingFailed);
 
             //NOTE: is property even needed? Could just use a setter function?
             //create the property
