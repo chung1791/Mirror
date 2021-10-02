@@ -238,6 +238,8 @@ namespace Mirror.Weaver
             FieldDefinition syncVarTField = new FieldDefinition($"{fd.Name}_generated", FieldAttributes.Public, syncVarT_ForValue);
             addedSyncVarTs[syncVarTField] = fd;
 
+            // add getters/setters so that SyncVarAttributeAccessReplacer can
+            // simply change the instruction to 'Call' with getter/setter.
             MethodDefinition get = GenerateSyncVarGetter(syncVarTField, syncVarT_ForValue, fd, originalName);
             MethodDefinition set = GenerateSyncVarSetter(syncVarTField, syncVarT_ForValue, td, fd, originalName, ref WeavingFailed);
 
