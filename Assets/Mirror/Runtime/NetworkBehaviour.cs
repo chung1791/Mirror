@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using Mirror.RemoteCalls;
 using UnityEngine;
 
@@ -85,44 +84,16 @@ namespace Mirror
         //   -> still supports dynamically sized types
         //
         // 64 bit mask, tracking up to 64 SyncVars.
+        // TODO syncVarDirtyBits aren't used anymore. only to trigger user onserialize?
         protected ulong syncVarDirtyBits { get; private set; }
         // 64 bit mask, tracking up to 64 sync collections (internal for tests).
         // internal for tests, field for faster access (instead of property)
         // TODO 64 SyncLists are too much. consider smaller mask later.
         internal ulong syncObjectDirtyBits;
 
-        // Weaver replaces '[SyncVar] int health' with 'Networkhealth' property.
-        // setter calls the hook if value changed.
-        // if we then modify the [SyncVar] from inside the setter,
-        // the setter would call the hook and we deadlock.
-        // hook guard prevents that.
-        ulong syncVarHookGuard;
-
-        // USED BY WEAVER to set syncvars in host mode without deadlocking
-        protected bool GetSyncVarHookGuard(ulong dirtyBit) =>
-            (syncVarHookGuard & dirtyBit) != 0UL;
-
-        // Deprecated 2021-09-16 (old weavers used it)
-        [Obsolete("Renamed to GetSyncVarHookGuard (uppercase)")]
-        protected bool getSyncVarHookGuard(ulong dirtyBit) => GetSyncVarHookGuard(dirtyBit);
-
-        // USED BY WEAVER to set syncvars in host mode without deadlocking
-        protected void SetSyncVarHookGuard(ulong dirtyBit, bool value)
-        {
-            // set the bit
-            if (value)
-                syncVarHookGuard |= dirtyBit;
-            // clear the bit
-            else
-                syncVarHookGuard &= ~dirtyBit;
-        }
-
-        // Deprecated 2021-09-16 (old weavers used it)
-        [Obsolete("Renamed to SetSyncVarHookGuard (uppercase)")]
-        protected void setSyncVarHookGuard(ulong dirtyBit, bool value) => SetSyncVarHookGuard(dirtyBit, value);
-
         /// <summary>Set as dirty so that it's synced to clients again.</summary>
         // these are masks, not bit numbers, ie. 110011b not '2' for 2nd bit.
+        // TODO syncVarDirtyBits aren't used anymore. only to trigger user onserialize?
         public void SetSyncVarDirtyBit(ulong dirtyBit)
         {
             syncVarDirtyBits |= dirtyBit;
@@ -320,248 +291,6 @@ namespace Mirror
             conn.Send(message, channelId);
         }
 
-        // helper function for [SyncVar] GameObjects.
-        // needs to be public so that tests & NetworkBehaviours from other
-        // assemblies both find it
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public static bool SyncVarGameObjectEqual(GameObject newGameObject, uint netIdField)
-        {
-            uint newNetId = 0;
-            if (newGameObject != null)
-            {
-                NetworkIdentity identity = newGameObject.GetComponent<NetworkIdentity>();
-                if (identity != null)
-                {
-                    newNetId = identity.netId;
-                    if (newNetId == 0)
-                    {
-                        Debug.LogWarning($"SetSyncVarGameObject GameObject {newGameObject} has a zero netId. Maybe it is not spawned yet?");
-                    }
-                }
-            }
-
-            return newNetId == netIdField;
-        }
-
-        // helper function for [SyncVar] GameObjects.
-        // dirtyBit is a mask like 00010
-        protected void SetSyncVarGameObject(GameObject newGameObject, ref GameObject gameObjectField, ulong dirtyBit, ref uint netIdField)
-        {
-            if (GetSyncVarHookGuard(dirtyBit))
-                return;
-
-            uint newNetId = 0;
-            if (newGameObject != null)
-            {
-                NetworkIdentity identity = newGameObject.GetComponent<NetworkIdentity>();
-                if (identity != null)
-                {
-                    newNetId = identity.netId;
-                    if (newNetId == 0)
-                    {
-                        Debug.LogWarning($"SetSyncVarGameObject GameObject {newGameObject} has a zero netId. Maybe it is not spawned yet?");
-                    }
-                }
-            }
-
-            //Debug.Log($"SetSyncVar GameObject {GetType().Name} bit:{dirtyBit} netfieldId:{netIdField} -> {newNetId}");
-            SetSyncVarDirtyBit(dirtyBit);
-            // assign new one on the server, and in case we ever need it on client too
-            gameObjectField = newGameObject;
-            netIdField = newNetId;
-        }
-
-        // helper function for [SyncVar] GameObjects.
-        // -> ref GameObject as second argument makes OnDeserialize processing easier
-        protected GameObject GetSyncVarGameObject(uint netId, ref GameObject gameObjectField)
-        {
-            // server always uses the field
-            if (isServer)
-            {
-                return gameObjectField;
-            }
-
-            // client always looks up based on netId because objects might get in and out of range
-            // over and over again, which shouldn't null them forever
-            if (NetworkClient.spawned.TryGetValue(netId, out NetworkIdentity identity) && identity != null)
-                return gameObjectField = identity.gameObject;
-            return null;
-        }
-
-        // helper function for [SyncVar] NetworkIdentities.
-        // needs to be public so that tests & NetworkBehaviours from other
-        // assemblies both find it
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public static bool SyncVarNetworkIdentityEqual(NetworkIdentity newIdentity, uint netIdField)
-        {
-            uint newNetId = 0;
-            if (newIdentity != null)
-            {
-                newNetId = newIdentity.netId;
-                if (newNetId == 0)
-                {
-                    Debug.LogWarning($"SetSyncVarNetworkIdentity NetworkIdentity {newIdentity} has a zero netId. Maybe it is not spawned yet?");
-                }
-            }
-
-            // netId changed?
-            return newNetId == netIdField;
-        }
-
-        // helper function for [SyncVar] NetworkIdentities.
-        // dirtyBit is a mask like 00010
-        protected void SetSyncVarNetworkIdentity(NetworkIdentity newIdentity, ref NetworkIdentity identityField, ulong dirtyBit, ref uint netIdField)
-        {
-            if (GetSyncVarHookGuard(dirtyBit))
-                return;
-
-            uint newNetId = 0;
-            if (newIdentity != null)
-            {
-                newNetId = newIdentity.netId;
-                if (newNetId == 0)
-                {
-                    Debug.LogWarning($"SetSyncVarNetworkIdentity NetworkIdentity {newIdentity} has a zero netId. Maybe it is not spawned yet?");
-                }
-            }
-
-            //Debug.Log($"SetSyncVarNetworkIdentity NetworkIdentity {GetType().Name} bit:{dirtyBit} netIdField:{netIdField} -> {newNetId}");
-            SetSyncVarDirtyBit(dirtyBit);
-            netIdField = newNetId;
-            // assign new one on the server, and in case we ever need it on client too
-            identityField = newIdentity;
-        }
-
-        // helper function for [SyncVar] NetworkIdentities.
-        // -> ref GameObject as second argument makes OnDeserialize processing easier
-        protected NetworkIdentity GetSyncVarNetworkIdentity(uint netId, ref NetworkIdentity identityField)
-        {
-            // server always uses the field
-            if (isServer)
-            {
-                return identityField;
-            }
-
-            // client always looks up based on netId because objects might get in and out of range
-            // over and over again, which shouldn't null them forever
-            NetworkClient.spawned.TryGetValue(netId, out identityField);
-            return identityField;
-        }
-
-        protected static bool SyncVarNetworkBehaviourEqual<T>(T newBehaviour, NetworkBehaviourSyncVar syncField) where T : NetworkBehaviour
-        {
-            uint newNetId = 0;
-            int newComponentIndex = 0;
-            if (newBehaviour != null)
-            {
-                newNetId = newBehaviour.netId;
-                newComponentIndex = newBehaviour.ComponentIndex;
-                if (newNetId == 0)
-                {
-                    Debug.LogWarning($"SetSyncVarNetworkIdentity NetworkIdentity {newBehaviour} has a zero netId. Maybe it is not spawned yet?");
-                }
-            }
-
-            // netId changed?
-            return syncField.Equals(newNetId, newComponentIndex);
-        }
-
-        // helper function for [SyncVar] NetworkIdentities.
-        // dirtyBit is a mask like 00010
-        protected void SetSyncVarNetworkBehaviour<T>(T newBehaviour, ref T behaviourField, ulong dirtyBit, ref NetworkBehaviourSyncVar syncField) where T : NetworkBehaviour
-        {
-            if (GetSyncVarHookGuard(dirtyBit))
-                return;
-
-            uint newNetId = 0;
-            int componentIndex = 0;
-            if (newBehaviour != null)
-            {
-                newNetId = newBehaviour.netId;
-                componentIndex = newBehaviour.ComponentIndex;
-                if (newNetId == 0)
-                {
-                    Debug.LogWarning($"{nameof(SetSyncVarNetworkBehaviour)} NetworkIdentity {newBehaviour} has a zero netId. Maybe it is not spawned yet?");
-                }
-            }
-
-            syncField = new NetworkBehaviourSyncVar(newNetId, componentIndex);
-
-            SetSyncVarDirtyBit(dirtyBit);
-
-            // assign new one on the server, and in case we ever need it on client too
-            behaviourField = newBehaviour;
-
-            // Debug.Log($"SetSyncVarNetworkBehaviour NetworkIdentity {GetType().Name} bit [{dirtyBit}] netIdField:{oldField}->{syncField}");
-        }
-
-        // helper function for [SyncVar] NetworkIdentities.
-        // -> ref GameObject as second argument makes OnDeserialize processing easier
-        protected T GetSyncVarNetworkBehaviour<T>(NetworkBehaviourSyncVar syncNetBehaviour, ref T behaviourField) where T : NetworkBehaviour
-        {
-            // server always uses the field
-            if (isServer)
-            {
-                return behaviourField;
-            }
-
-            // client always looks up based on netId because objects might get in and out of range
-            // over and over again, which shouldn't null them forever
-            if (!NetworkClient.spawned.TryGetValue(syncNetBehaviour.netId, out NetworkIdentity identity))
-            {
-                return null;
-            }
-
-            behaviourField = identity.NetworkBehaviours[syncNetBehaviour.componentIndex] as T;
-            return behaviourField;
-        }
-
-        // backing field for sync NetworkBehaviour
-        public struct NetworkBehaviourSyncVar : IEquatable<NetworkBehaviourSyncVar>
-        {
-            public uint netId;
-            // limited to 255 behaviours per identity
-            public byte componentIndex;
-
-            public NetworkBehaviourSyncVar(uint netId, int componentIndex) : this()
-            {
-                this.netId = netId;
-                this.componentIndex = (byte)componentIndex;
-            }
-
-            public bool Equals(NetworkBehaviourSyncVar other)
-            {
-                return other.netId == netId && other.componentIndex == componentIndex;
-            }
-
-            public bool Equals(uint netId, int componentIndex)
-            {
-                return this.netId == netId && this.componentIndex == componentIndex;
-            }
-
-            public override string ToString()
-            {
-                return $"[netId:{netId} compIndex:{componentIndex}]";
-            }
-        }
-
-        protected static bool SyncVarEqual<T>(T value, ref T fieldValue)
-        {
-            // newly initialized or changed value?
-            // value.Equals(fieldValue) allocates without 'where T : IEquatable'
-            // seems like we use EqualityComparer to avoid allocations,
-            // because not all SyncVars<T> are IEquatable
-            return EqualityComparer<T>.Default.Equals(value, fieldValue);
-        }
-
-        // dirtyBit is a mask like 00010
-        protected void SetSyncVar<T>(T value, ref T fieldValue, ulong dirtyBit)
-        {
-            //Debug.Log($"SetSyncVar {GetType().Name} bit:{dirtyBit} fieldValue:{value}");
-            SetSyncVarDirtyBit(dirtyBit);
-            fieldValue = value;
-        }
-
         /// <summary>Override to do custom serialization (instead of SyncVars/SyncLists). Use OnDeserialize too.</summary>
         // if a class has syncvars, then OnSerialize/OnDeserialize are added
         // automatically.
@@ -570,21 +299,16 @@ namespace Mirror
         //   note: SyncVar hooks are only called when inital=false
         public virtual bool OnSerialize(NetworkWriter writer, bool initialState)
         {
-            bool objectWritten = false;
             // if initialState: write all SyncVars.
             // otherwise write dirtyBits+dirty SyncVars
             if (initialState)
             {
-                objectWritten = SerializeObjectsAll(writer);
+                return SerializeObjectsAll(writer);
             }
             else
             {
-                objectWritten = SerializeObjectsDelta(writer);
+                return SerializeObjectsDelta(writer);
             }
-
-            bool syncVarWritten = SerializeSyncVars(writer, initialState);
-
-            return objectWritten || syncVarWritten;
         }
 
         /// <summary>Override to do custom deserialization (instead of SyncVars/SyncLists). Use OnSerialize too.</summary>
@@ -598,34 +322,6 @@ namespace Mirror
             {
                 DeSerializeObjectsDelta(reader);
             }
-
-            DeserializeSyncVars(reader, initialState);
-        }
-
-        // USED BY WEAVER
-        protected virtual bool SerializeSyncVars(NetworkWriter writer, bool initialState)
-        {
-            return false;
-
-            // SyncVar are written here in subclass
-
-            // if initialState
-            //   write all SyncVars
-            // else
-            //   write syncVarDirtyBits
-            //   write dirty SyncVars
-        }
-
-        // USED BY WEAVER
-        protected virtual void DeserializeSyncVars(NetworkReader reader, bool initialState)
-        {
-            // SyncVars are read here in subclass
-
-            // if initialState
-            //   read all SyncVars
-            // else
-            //   read syncVarDirtyBits
-            //   read dirty SyncVars
         }
 
         public bool SerializeObjectsAll(NetworkWriter writer)

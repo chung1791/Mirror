@@ -29,19 +29,6 @@ namespace Mirror.Weaver
         public MethodReference ArraySegmentConstructorReference;
 
         // syncvar
-        public MethodReference syncVarEqualReference;
-        public MethodReference syncVarNetworkIdentityEqualReference;
-        public MethodReference syncVarGameObjectEqualReference;
-        public MethodReference setSyncVarReference;
-        public MethodReference setSyncVarHookGuard;
-        public MethodReference getSyncVarHookGuard;
-        public MethodReference setSyncVarGameObjectReference;
-        public MethodReference getSyncVarGameObjectReference;
-        public MethodReference setSyncVarNetworkIdentityReference;
-        public MethodReference getSyncVarNetworkIdentityReference;
-        public MethodReference syncVarNetworkBehaviourEqualReference;
-        public MethodReference setSyncVarNetworkBehaviourReference;
-        public MethodReference getSyncVarNetworkBehaviourReference;
         public MethodReference registerCommandDelegateReference;
         public MethodReference registerRpcDelegateReference;
         public MethodReference getTypeFromHandleReference;
@@ -117,21 +104,6 @@ namespace Mirror.Weaver
             RecycleWriterReference = Resolvers.ResolveMethod(NetworkWriterPoolType, assembly, Log, "Recycle", ref WeavingFailed);
 
             NetworkClientConnectionReference = Resolvers.ResolveMethod(NetworkClientType, assembly, Log, "get_connection", ref WeavingFailed);
-
-            syncVarEqualReference = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "SyncVarEqual", ref WeavingFailed);
-            syncVarNetworkIdentityEqualReference = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "SyncVarNetworkIdentityEqual", ref WeavingFailed);
-            syncVarGameObjectEqualReference = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "SyncVarGameObjectEqual", ref WeavingFailed);
-            setSyncVarReference = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "SetSyncVar", ref WeavingFailed);
-            setSyncVarHookGuard = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "SetSyncVarHookGuard", ref WeavingFailed);
-            getSyncVarHookGuard = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "GetSyncVarHookGuard", ref WeavingFailed);
-
-            setSyncVarGameObjectReference = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "SetSyncVarGameObject", ref WeavingFailed);
-            getSyncVarGameObjectReference = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "GetSyncVarGameObject", ref WeavingFailed);
-            setSyncVarNetworkIdentityReference = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "SetSyncVarNetworkIdentity", ref WeavingFailed);
-            getSyncVarNetworkIdentityReference = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "GetSyncVarNetworkIdentity", ref WeavingFailed);
-            syncVarNetworkBehaviourEqualReference = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "SyncVarNetworkBehaviourEqual", ref WeavingFailed);
-            setSyncVarNetworkBehaviourReference = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "SetSyncVarNetworkBehaviour", ref WeavingFailed);
-            getSyncVarNetworkBehaviourReference = Resolvers.ResolveMethod(NetworkBehaviourType, assembly, Log, "GetSyncVarNetworkBehaviour", ref WeavingFailed);
 
             registerCommandDelegateReference = Resolvers.ResolveMethod(RemoteCallHelperType, assembly, Log, "RegisterCommandDelegate", ref WeavingFailed);
             registerRpcDelegateReference = Resolvers.ResolveMethod(RemoteCallHelperType, assembly, Log, "RegisterRpcDelegate", ref WeavingFailed);

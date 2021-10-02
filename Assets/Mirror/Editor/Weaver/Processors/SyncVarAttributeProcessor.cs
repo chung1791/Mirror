@@ -10,9 +10,6 @@ namespace Mirror.Weaver
     // not static, because ILPostProcessor is multithreaded
     public class SyncVarAttributeProcessor
     {
-        // ulong = 64 bytes
-        const int SyncVarLimit = 64;
-
         AssemblyDefinition assembly;
         WeaverTypes weaverTypes;
         SyncVarAccessLists syncVarAccessLists;
@@ -86,7 +83,7 @@ namespace Mirror.Weaver
                    method.Parameters[1].ParameterType.FullName == syncVar.FieldType.FullName;
         }
 
-        public MethodDefinition GenerateSyncVarGetter(FieldDefinition syncVarT, TypeReference syncVarT_ForValue, FieldDefinition originalSyncVar, string originalName, FieldDefinition netFieldId)
+        public MethodDefinition GenerateSyncVarGetter(FieldDefinition syncVarT, TypeReference syncVarT_ForValue, FieldDefinition originalSyncVar, string originalName)
         {
             //Create the get method
             MethodDefinition get = new MethodDefinition(
@@ -165,7 +162,7 @@ namespace Mirror.Weaver
             return get;
         }
 
-        public MethodDefinition GenerateSyncVarSetter(FieldDefinition syncVarT, TypeReference syncVarT_ForValue, TypeDefinition originalSyncVar, FieldDefinition fd, string originalName, long dirtyBit, FieldDefinition netFieldId, ref bool WeavingFailed)
+        public MethodDefinition GenerateSyncVarSetter(FieldDefinition syncVarT, TypeReference syncVarT_ForValue, TypeDefinition originalSyncVar, FieldDefinition fd, string originalName, ref bool WeavingFailed)
         {
             //Create the set method
             MethodDefinition set = new MethodDefinition($"set_Network{originalName}", MethodAttributes.Public |
@@ -231,29 +228,9 @@ namespace Mirror.Weaver
         // can't add to it while iterating.
         // new SyncVar<T> fields are added to 'addedSyncVarTs' with
         //   <SyncVar<T>, [SyncVar] original>
-        public void ProcessSyncVar(TypeDefinition td, FieldDefinition fd, Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds, long dirtyBit, Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs, ref bool WeavingFailed)
+        public void ProcessSyncVar(TypeDefinition td, FieldDefinition fd, Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs, ref bool WeavingFailed)
         {
             string originalName = fd.Name;
-
-            // GameObject/NetworkIdentity SyncVars have a new field for netId
-            FieldDefinition netIdField = null;
-            // NetworkBehaviour has different field type than other NetworkIdentityFields
-            if (fd.FieldType.IsDerivedFrom<NetworkBehaviour>())
-            {
-                netIdField = new FieldDefinition($"___{fd.Name}NetId",
-                   FieldAttributes.Private,
-                   weaverTypes.Import<NetworkBehaviour.NetworkBehaviourSyncVar>());
-
-                syncVarNetIds[fd] = netIdField;
-            }
-            else if (fd.FieldType.IsNetworkIdentityField())
-            {
-                netIdField = new FieldDefinition($"___{fd.Name}NetId",
-                    FieldAttributes.Private,
-                    weaverTypes.Import<uint>());
-
-                syncVarNetIds[fd] = netIdField;
-            }
 
             // make generic instance of SyncVar<T> type for the type of 'value'
             // initial value is set in constructor.
@@ -261,8 +238,8 @@ namespace Mirror.Weaver
             FieldDefinition syncVarTField = new FieldDefinition($"___{fd.Name}SyncVarT", FieldAttributes.Public, syncVarT_ForValue);
             addedSyncVarTs[syncVarTField] = fd;
 
-            MethodDefinition get = GenerateSyncVarGetter(syncVarTField, syncVarT_ForValue, fd, originalName, netIdField);
-            MethodDefinition set = GenerateSyncVarSetter(syncVarTField, syncVarT_ForValue, td, fd, originalName, dirtyBit, netIdField, ref WeavingFailed);
+            MethodDefinition get = GenerateSyncVarGetter(syncVarTField, syncVarT_ForValue, fd, originalName);
+            MethodDefinition set = GenerateSyncVarSetter(syncVarTField, syncVarT_ForValue, td, fd, originalName, ref WeavingFailed);
 
             //NOTE: is property even needed? Could just use a setter function?
             //create the property
@@ -282,14 +259,9 @@ namespace Mirror.Weaver
             syncVarAccessLists.replacementGetterProperties[fd] = get;
         }
 
-        public (List<FieldDefinition> syncVars, Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds) ProcessSyncVars(TypeDefinition td, Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs, ref bool WeavingFailed)
+        public List<FieldDefinition> ProcessSyncVars(TypeDefinition td, Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs, ref bool WeavingFailed)
         {
             List<FieldDefinition> syncVars = new List<FieldDefinition>();
-            Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds = new Dictionary<FieldDefinition, FieldDefinition>();
-
-            // the mapping of dirtybits to sync-vars is implicit in the order of the fields here. this order is recorded in m_replacementProperties.
-            // start assigning syncvars at the place the base class stopped, if any
-            int dirtyBitCounter = syncVarAccessLists.GetSyncVarStart(td.BaseType.FullName);
 
             // find syncvars
             foreach (FieldDefinition fd in td.Fields)
@@ -318,15 +290,7 @@ namespace Mirror.Weaver
                     {
                         syncVars.Add(fd);
 
-                        ProcessSyncVar(td, fd, syncVarNetIds, 1L << dirtyBitCounter, addedSyncVarTs, ref WeavingFailed);
-                        dirtyBitCounter += 1;
-
-                        if (dirtyBitCounter > SyncVarLimit)
-                        {
-                            Log.Error($"{td.Name} has > {SyncVarLimit} SyncVars. Consider refactoring your class into multiple components", td);
-                            WeavingFailed = true;
-                            continue;
-                        }
+                        ProcessSyncVar(td, fd, addedSyncVarTs, ref WeavingFailed);
                     }
                 }
             }
@@ -337,14 +301,9 @@ namespace Mirror.Weaver
                 td.Fields.Add(fd);
             }
 
-            // add all the new SyncVar __netId fields
-            foreach (FieldDefinition fd in syncVarNetIds.Values)
-            {
-                td.Fields.Add(fd);
-            }
             syncVarAccessLists.SetNumSyncVars(td.FullName, syncVars.Count);
 
-            return (syncVars, syncVarNetIds);
+            return syncVars;
         }
 
         // inject initialization code for SyncVar<T> from [SyncVar] into ctor

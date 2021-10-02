@@ -156,29 +156,4 @@ namespace Mirror.Tests
             Assert.That(monsterComp.IsDirty(), Is.False);
         }
     }
-
-    // hook tests can only be ran when inheriting from NetworkBehaviour
-    public class NetworkBehaviourDirtyBitsHookGuardTester : NetworkBehaviour
-    {
-        [Test]
-        public void HookGuard()
-        {
-            // set hook guard for some bits
-            for (int i = 0; i < 10; ++i)
-            {
-                ulong bit = 1ul << i;
-
-                // should be false by default
-                Assert.That(GetSyncVarHookGuard(bit), Is.False);
-
-                // set true
-                SetSyncVarHookGuard(bit, true);
-                Assert.That(GetSyncVarHookGuard(bit), Is.True);
-
-                // set false again
-                SetSyncVarHookGuard(bit, false);
-                Assert.That(GetSyncVarHookGuard(bit), Is.False);
-            }
-        }
-    }
 }

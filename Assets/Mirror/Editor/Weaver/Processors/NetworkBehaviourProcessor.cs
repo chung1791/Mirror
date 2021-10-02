@@ -24,8 +24,6 @@ namespace Mirror.Weaver
 
         List<FieldDefinition> syncVars = new List<FieldDefinition>();
         List<FieldDefinition> syncObjects = new List<FieldDefinition>();
-        // <SyncVarField,NetIdField>
-        Dictionary<FieldDefinition, FieldDefinition> syncVarNetIds = new Dictionary<FieldDefinition, FieldDefinition>();
         readonly List<CmdResult> commands = new List<CmdResult>();
         readonly List<ClientRpcResult> clientRpcs = new List<ClientRpcResult>();
         readonly List<MethodDefinition> targetRpcs = new List<MethodDefinition>();
@@ -83,7 +81,7 @@ namespace Mirror.Weaver
             Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs = new Dictionary<FieldDefinition, FieldDefinition>();
 
             // deconstruct tuple and set fields
-            (syncVars, syncVarNetIds) = syncVarAttributeProcessor.ProcessSyncVars(netBehaviourSubclass, addedSyncVarTs, ref WeavingFailed);
+            syncVars = syncVarAttributeProcessor.ProcessSyncVars(netBehaviourSubclass, addedSyncVarTs, ref WeavingFailed);
 
             syncObjects = SyncObjectProcessor.FindSyncObjectsFields(writers, readers, Log, netBehaviourSubclass, ref WeavingFailed);
 
