@@ -61,6 +61,9 @@ namespace Mirror.Weaver
         public TypeReference SyncVarT_Type;
         public MethodReference SyncVarT_GenericConstructor;
 
+        // SyncVar<T>.Value property method
+        public MethodReference SyncVarT_ValueReference;
+
         // attributes
         public TypeDefinition initializeOnLoadMethodAttribute;
         public TypeDefinition runtimeInitializeOnLoadMethodAttribute;
@@ -82,6 +85,7 @@ namespace Mirror.Weaver
 
             SyncVarT_Type = Import(typeof(SyncVar<>));
             SyncVarT_GenericConstructor = Resolvers.ResolveMethod(SyncVarT_Type, assembly, Log, ".ctor", ref WeavingFailed);
+            SyncVarT_ValueReference = Resolvers.ResolveMethod(SyncVarT_Type, assembly, Log, "get_Value", ref WeavingFailed);
 
             ActionT_T_Type = Import(typeof(Action<,>));
             ActionT_T_GenericConstructor = Resolvers.ResolveMethod(ActionT_T_Type, assembly, Log, ".ctor", ref WeavingFailed);
