@@ -235,7 +235,7 @@ namespace Mirror.Weaver
             // make generic instance of SyncVar<T> type for the type of 'value'
             // initial value is set in constructor.
             TypeReference syncVarT_ForValue = weaverTypes.SyncVarT_Type.MakeGenericInstanceType(fd.FieldType);
-            FieldDefinition syncVarTField = new FieldDefinition($"___{fd.Name}SyncVarT", FieldAttributes.Public, syncVarT_ForValue);
+            FieldDefinition syncVarTField = new FieldDefinition($"{fd.Name}_generated", FieldAttributes.Public, syncVarT_ForValue);
             addedSyncVarTs[syncVarTField] = fd;
 
             MethodDefinition get = GenerateSyncVarGetter(syncVarTField, syncVarT_ForValue, fd, originalName);
@@ -243,7 +243,7 @@ namespace Mirror.Weaver
 
             //NOTE: is property even needed? Could just use a setter function?
             //create the property
-            PropertyDefinition propertyDefinition = new PropertyDefinition($"Network{originalName}", PropertyAttributes.None, fd.FieldType)
+            PropertyDefinition propertyDefinition = new PropertyDefinition($"{originalName}_generated_property", PropertyAttributes.None, fd.FieldType)
             {
                 GetMethod = get,
                 SetMethod = set
