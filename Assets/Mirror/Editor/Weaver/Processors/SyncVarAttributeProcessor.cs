@@ -439,41 +439,8 @@ namespace Mirror.Weaver
         // see also: https://groups.google.com/g/mono-cecil/c/JCLRPxOym4A?pli=1
         public static void InjectSyncVarT_Initialization(AssemblyDefinition assembly, ILProcessor ctorWorker, TypeDefinition td, FieldDefinition syncVarT, FieldDefinition originalSyncVar, WeaverTypes weaverTypes, Logger Log, ref bool WeavingFailed)
         {
-            // find hook method in original [SyncVar] (if any)
-
+            // find hook method in original [SyncVar(hook="func")] attribute (if any)
             MethodDefinition hookMethod = GetHookMethod(td, originalSyncVar, Log, ref WeavingFailed);
-            if (hookMethod != null)
-            {
-                Log.Warning($"{originalSyncVar.Name} has hook {hookMethod.Name}");
-                /*
-                //if (NetworkServer.localClientActive && !getSyncVarHookGuard(dirtyBit))
-                Instruction label = worker.Create(OpCodes.Nop);
-                worker.Emit(OpCodes.Call, weaverTypes.NetworkServerGetLocalClientActive);
-                worker.Emit(OpCodes.Brfalse, label);
-                worker.Emit(OpCodes.Ldarg_0);
-                worker.Emit(OpCodes.Ldc_I8, dirtyBit);
-                worker.Emit(OpCodes.Call, weaverTypes.getSyncVarHookGuard);
-                worker.Emit(OpCodes.Brtrue, label);
-
-                // setSyncVarHookGuard(dirtyBit, true);
-                worker.Emit(OpCodes.Ldarg_0);
-                worker.Emit(OpCodes.Ldc_I8, dirtyBit);
-                worker.Emit(OpCodes.Ldc_I4_1);
-                worker.Emit(OpCodes.Call, weaverTypes.setSyncVarHookGuard);
-
-                // call hook (oldValue, newValue)
-                // Generates: OnValueChanged(oldValue, value);
-                WriteCallHookMethodUsingArgument(worker, hookMethod, oldValue);
-
-                // setSyncVarHookGuard(dirtyBit, false);
-                worker.Emit(OpCodes.Ldarg_0);
-                worker.Emit(OpCodes.Ldc_I8, dirtyBit);
-                worker.Emit(OpCodes.Ldc_I4_0);
-                worker.Emit(OpCodes.Call, weaverTypes.setSyncVarHookGuard);
-
-                worker.Append(label);
-                */
-            }
 
             // make generic instance of SyncVar<T> type for the type of 'value'
             TypeReference syncVarT_ForValue = weaverTypes.SyncVarT_Type.MakeGenericInstanceType(originalSyncVar.FieldType);
@@ -481,10 +448,38 @@ namespace Mirror.Weaver
             // final 'StFld syncVarT' needs 'this.' in front
             ctorWorker.Emit(OpCodes.Ldarg_0);
 
-            // push 'new SyncVar<T>(value)' on stack
+            // push 'new SyncVar<T>(value, hook)' on stack
             ctorWorker.Emit(OpCodes.Ldarg_0);                // 'this' for this.originalSyncVar
             ctorWorker.Emit(OpCodes.Ldfld, originalSyncVar); // value = originalSyncVar
-            ctorWorker.Emit(OpCodes.Ldnull);                 // hook = null
+            // pass hook parameter (a method converted to an Action)
+            if (hookMethod != null)
+            {
+                // hook can be static and instance.
+                // for instance method, we need to pass 'this.' first.
+                if (!hookMethod.IsStatic)
+                {
+                    ctorWorker.Emit(OpCodes.Ldarg_0); // 'this' for hook method
+                }
+
+                // when doing SyncVar<T> test = new SyncVar<T>(value, hook),
+                // this is the IL code to convert hook to Action:
+                //   ldftn instance void Mirror.Examples.Tanks.Test::OnChanged(int32, int32)
+                //   newobj instance void class [netstandard]System.Action`2<int32, int32>::.ctor(object, native int)
+                ctorWorker.Emit(OpCodes.Ldftn, hookMethod);
+
+                // make generic instance of Action<T,T> type for the type of 'value'
+                TypeReference actionT_T_ForValue = weaverTypes.ActionT_T_Type.MakeGenericInstanceType(originalSyncVar.FieldType, originalSyncVar.FieldType);
+
+                // make generic ctor for Action<T,T> for the target type Action<T,T> with type of 'value'
+                GenericInstanceType actionT_T_GenericInstanceType = (GenericInstanceType)actionT_T_ForValue;
+                MethodReference actionT_T_Ctor_ForValue = weaverTypes.ActionT_T_GenericConstructor.MakeHostInstanceGeneric(assembly.MainModule, actionT_T_GenericInstanceType);
+                ctorWorker.Emit(OpCodes.Newobj, actionT_T_Ctor_ForValue);
+            }
+            else
+            {
+                // push 'hook = null' onto stack
+                ctorWorker.Emit(OpCodes.Ldnull);
+            }
             // make generic ctor for SyncVar<T> for the target type SyncVar<T> with type of 'value'
             GenericInstanceType syncVarT_GenericInstanceType = (GenericInstanceType)syncVarT_ForValue;
             MethodReference syncVarT_Ctor_ForValue = weaverTypes.SyncVarT_GenericConstructor.MakeHostInstanceGeneric(assembly.MainModule, syncVarT_GenericInstanceType);
