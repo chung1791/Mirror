@@ -10,7 +10,6 @@ namespace Mirror.Weaver
     {
         public MethodReference ScriptableObjectCreateInstanceMethod;
 
-        public MethodReference NetworkBehaviourDirtyBitsReference;
         public MethodReference GetPooledWriterReference;
         public MethodReference RecycleWriterReference;
 
@@ -19,7 +18,6 @@ namespace Mirror.Weaver
         public MethodReference CmdDelegateConstructor;
 
         public MethodReference NetworkServerGetActive;
-        public MethodReference NetworkServerGetLocalClientActive;
         public MethodReference NetworkClientGetActive;
 
         // custom attribute types
@@ -81,7 +79,6 @@ namespace Mirror.Weaver
 
             TypeReference NetworkServerType = Import(typeof(NetworkServer));
             NetworkServerGetActive = Resolvers.ResolveMethod(NetworkServerType, assembly, Log, "get_active", ref WeavingFailed);
-            NetworkServerGetLocalClientActive = Resolvers.ResolveMethod(NetworkServerType, assembly, Log, "get_localClientActive", ref WeavingFailed);
             TypeReference NetworkClientType = Import(typeof(NetworkClient));
             NetworkClientGetActive = Resolvers.ResolveMethod(NetworkClientType, assembly, Log, "get_active", ref WeavingFailed);
 
@@ -98,7 +95,6 @@ namespace Mirror.Weaver
                 md => md.Name == "CreateInstance" && md.HasGenericParameters,
                 ref WeavingFailed);
 
-            NetworkBehaviourDirtyBitsReference = Resolvers.ResolveProperty(NetworkBehaviourType, assembly, "syncVarDirtyBits");
             TypeReference NetworkWriterPoolType = Import(typeof(NetworkWriterPool));
             GetPooledWriterReference = Resolvers.ResolveMethod(NetworkWriterPoolType, assembly, Log, "GetWriter", ref WeavingFailed);
             RecycleWriterReference = Resolvers.ResolveMethod(NetworkWriterPoolType, assembly, Log, "Recycle", ref WeavingFailed);

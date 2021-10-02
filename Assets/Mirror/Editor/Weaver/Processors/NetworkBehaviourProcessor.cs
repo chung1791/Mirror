@@ -16,13 +16,11 @@ namespace Mirror.Weaver
     {
         AssemblyDefinition assembly;
         WeaverTypes weaverTypes;
-        SyncVarAccessLists syncVarAccessLists;
         SyncVarAttributeProcessor syncVarAttributeProcessor;
         Writers writers;
         Readers readers;
         Logger Log;
 
-        List<FieldDefinition> syncVars = new List<FieldDefinition>();
         List<FieldDefinition> syncObjects = new List<FieldDefinition>();
         readonly List<CmdResult> commands = new List<CmdResult>();
         readonly List<ClientRpcResult> clientRpcs = new List<ClientRpcResult>();
@@ -49,7 +47,6 @@ namespace Mirror.Weaver
         {
             this.assembly = assembly;
             this.weaverTypes = weaverTypes;
-            this.syncVarAccessLists = syncVarAccessLists;
             this.writers = writers;
             this.readers = readers;
             this.Log = Log;
@@ -81,7 +78,7 @@ namespace Mirror.Weaver
             Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs = new Dictionary<FieldDefinition, FieldDefinition>();
 
             // deconstruct tuple and set fields
-            syncVars = syncVarAttributeProcessor.ProcessSyncVars(netBehaviourSubclass, addedSyncVarTs, ref WeavingFailed);
+            syncVarAttributeProcessor.ProcessSyncVars(netBehaviourSubclass, addedSyncVarTs, ref WeavingFailed);
 
             syncObjects = SyncObjectProcessor.FindSyncObjectsFields(writers, readers, Log, netBehaviourSubclass, ref WeavingFailed);
 

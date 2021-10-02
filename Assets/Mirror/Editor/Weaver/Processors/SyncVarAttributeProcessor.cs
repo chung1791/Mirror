@@ -259,10 +259,8 @@ namespace Mirror.Weaver
             syncVarAccessLists.replacementGetterProperties[fd] = get;
         }
 
-        public List<FieldDefinition> ProcessSyncVars(TypeDefinition td, Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs, ref bool WeavingFailed)
+        public void ProcessSyncVars(TypeDefinition td, Dictionary<FieldDefinition, FieldDefinition> addedSyncVarTs, ref bool WeavingFailed)
         {
-            List<FieldDefinition> syncVars = new List<FieldDefinition>();
-
             // find syncvars
             foreach (FieldDefinition fd in td.Fields)
             {
@@ -288,8 +286,6 @@ namespace Mirror.Weaver
                     }
                     else
                     {
-                        syncVars.Add(fd);
-
                         ProcessSyncVar(td, fd, addedSyncVarTs, ref WeavingFailed);
                     }
                 }
@@ -300,10 +296,6 @@ namespace Mirror.Weaver
             {
                 td.Fields.Add(fd);
             }
-
-            syncVarAccessLists.SetNumSyncVars(td.FullName, syncVars.Count);
-
-            return syncVars;
         }
 
         // inject initialization code for SyncVar<T> from [SyncVar] into ctor
