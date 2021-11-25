@@ -131,19 +131,17 @@ namespace Mirror.Tests.SyncVarAttributeTests
                 out _, out _, out HookBehaviour serverObject,
                 out _, out _, out HookBehaviour clientObject);
 
-            const int clientValue = 10;
             const int serverValue = 24;
 
             // change it on server
             serverObject.value = serverValue;
-            clientObject.value = clientValue;
 
             // hook should change it on client
             int callCount = 0;
             clientObject.HookCalled += (oldValue, newValue) =>
             {
                 callCount++;
-                Assert.That(oldValue, Is.EqualTo(clientValue));
+                Assert.That(oldValue, Is.EqualTo(0));
                 Assert.That(newValue, Is.EqualTo(serverValue));
             };
 
@@ -164,20 +162,47 @@ namespace Mirror.Tests.SyncVarAttributeTests
             const int clientValue = 16;
             const int serverValue = 16;
 
-            // change it on server
+            // set both to same values once
             serverObject.value = serverValue;
             clientObject.value = clientValue;
 
-            // hook should change it on client
+            // client hook
             int callCount = 0;
             clientObject.HookCalled += (oldValue, newValue) =>
             {
                 callCount++;
             };
 
+            // hook shouldn't be called because both already have same value
             bool written = SyncToClient(serverObject, clientObject, intialState);
             Assert.IsTrue(written);
             Assert.That(callCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        [TestCase(true)]
+        [TestCase(false)]
+        public void Hook_OnlyCalledOnClient(bool intialState)
+        {
+            CreateNetworkedAndSpawn(
+                out _, out _, out HookBehaviour serverObject,
+                out _, out _, out HookBehaviour clientObject);
+
+            // set up hooks on server and client
+            int clientCalled = 0;
+            int serverCalled = 0;
+            clientObject.HookCalled += (oldValue, newValue) => ++clientCalled;
+            serverObject.HookCalled += (oldValue, newValue) => ++serverCalled;
+
+            // change on server
+            ++serverObject.value;
+            //++clientObject.value;
+
+            // sync. hook should've only been called on client.
+            bool written = SyncToClient(serverObject, clientObject, intialState);
+            Assert.IsTrue(written);
+            Assert.That(clientCalled, Is.EqualTo(1));
+            Assert.That(serverCalled, Is.EqualTo(0));
         }
 
         [Test]
@@ -189,19 +214,17 @@ namespace Mirror.Tests.SyncVarAttributeTests
                 out _, out _, out StaticHookBehaviour serverObject,
                 out _, out _, out StaticHookBehaviour clientObject);
 
-            const int clientValue = 10;
             const int serverValue = 24;
 
             // change it on server
             serverObject.value = serverValue;
-            clientObject.value = clientValue;
 
             // hook should change it on client
             int hookcallCount = 0;
             StaticHookBehaviour.HookCalled += (oldValue, newValue) =>
             {
                 hookcallCount++;
-                Assert.That(oldValue, Is.EqualTo(clientValue));
+                Assert.That(oldValue, Is.EqualTo(0));
                 Assert.That(newValue, Is.EqualTo(serverValue));
             };
 
@@ -345,12 +368,10 @@ namespace Mirror.Tests.SyncVarAttributeTests
                 out _, out _, out VirtualOverrideHook serverObject,
                 out _, out _, out VirtualOverrideHook clientObject);
 
-            const int clientValue = 10;
             const int serverValue = 24;
 
             // change it on server
             serverObject.value = serverValue;
-            clientObject.value = clientValue;
 
             // hook should change it on client
             int overrideCallCount = 0;
@@ -358,7 +379,7 @@ namespace Mirror.Tests.SyncVarAttributeTests
             clientObject.OverrideHookCalled += (oldValue, newValue) =>
             {
                 overrideCallCount++;
-                Assert.That(oldValue, Is.EqualTo(clientValue));
+                Assert.That(oldValue, Is.EqualTo(0));
                 Assert.That(newValue, Is.EqualTo(serverValue));
             };
             clientObject.BaseHookCalled += (oldValue, newValue) =>

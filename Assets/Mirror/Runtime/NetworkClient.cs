@@ -109,7 +109,7 @@ namespace Mirror
 
         internal static void RegisterSystemHandlers(bool hostMode)
         {
-            // host mode client / regular client react to some messages differently.
+            // host mode client / remote client react to some messages differently.
             // but we still need to add handlers for all of them to avoid
             // 'message id not found' errors.
             if (hostMode)
@@ -117,7 +117,6 @@ namespace Mirror
                 RegisterHandler<ObjectDestroyMessage>(OnHostClientObjectDestroy);
                 RegisterHandler<ObjectHideMessage>(OnHostClientObjectHide);
                 RegisterHandler<NetworkPongMessage>(msg => {}, false);
-                RegisterHandler<ChangeOwnerMessage>(OnChangeOwner);
                 RegisterHandler<SpawnMessage>(OnHostClientSpawn);
                 // host mode doesn't need spawning
                 RegisterHandler<ObjectSpawnStartedMessage>(msg => {});
@@ -132,11 +131,13 @@ namespace Mirror
                 RegisterHandler<ObjectHideMessage>(OnObjectHide);
                 RegisterHandler<NetworkPongMessage>(NetworkTime.OnClientPong, false);
                 RegisterHandler<SpawnMessage>(OnSpawn);
-                RegisterHandler<ChangeOwnerMessage>(OnChangeOwner);
                 RegisterHandler<ObjectSpawnStartedMessage>(OnObjectSpawnStarted);
                 RegisterHandler<ObjectSpawnFinishedMessage>(OnObjectSpawnFinished);
                 RegisterHandler<EntityStateMessage>(OnEntityStateMessage);
             }
+
+            // These handlers are the same for host and remote clients
+            RegisterHandler<ChangeOwnerMessage>(OnChangeOwner);
             RegisterHandler<RpcMessage>(OnRPCMessage);
         }
 
@@ -1019,12 +1020,6 @@ namespace Mirror
             }
         }
 
-        internal static void ChangeOwner(NetworkIdentity identity, ChangeOwnerMessage message)
-        {
-            identity.hasAuthority = message.isOwner;
-            identity.NotifyAuthority();
-        }
-
         // Finds Existing Object with NetId or spawns a new one using AssetId or sceneId
         internal static bool FindOrSpawnObject(SpawnMessage message, out NetworkIdentity identity)
         {
@@ -1283,6 +1278,24 @@ namespace Mirror
                 ChangeOwner(identity, message);
             else
                 Debug.LogError($"OnChangeOwner: Could not find object with netId {message.netId}");
+        }
+
+        internal static void ChangeOwner(NetworkIdentity identity, ChangeOwnerMessage message)
+        {
+            identity.hasAuthority = message.isOwner;
+            identity.NotifyAuthority();
+
+            identity.isLocalPlayer = message.isLocalPlayer;
+            if (identity.isLocalPlayer)
+                localPlayer = identity;
+            else if (localPlayer == identity)
+            {
+                // localPlayer may already be assigned to something else
+                // so only make it null if it's this identity.
+                localPlayer = null;
+            }
+
+            CheckForLocalPlayer(identity);
         }
 
         internal static void CheckForLocalPlayer(NetworkIdentity identity)

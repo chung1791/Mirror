@@ -27,7 +27,7 @@ namespace Mirror
     public struct CommandMessage : NetworkMessage
     {
         public uint netId;
-        public int componentIndex;
+        public byte componentIndex;
         public int functionHash;
         // the parameters for the Cmd function
         // -> ArraySegment to avoid unnecessary allocations
@@ -37,7 +37,7 @@ namespace Mirror
     public struct RpcMessage : NetworkMessage
     {
         public uint netId;
-        public int componentIndex;
+        public byte componentIndex;
         public int functionHash;
         // the parameters for the Cmd function
         // -> ArraySegment to avoid unnecessary allocations
@@ -69,6 +69,7 @@ namespace Mirror
     {
         public uint netId;
         public bool isOwner;
+        public bool isLocalPlayer;
     }
 
     public struct ObjectSpawnStartedMessage : NetworkMessage {}
