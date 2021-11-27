@@ -34,7 +34,7 @@ namespace Mirror
         /// </summary>
         [Tooltip("Diagnostic index of the player, e.g. Player1, Player2, etc.")]
         [SyncVar(hook = nameof(IndexChanged))]
-        public int index;
+        public int index = -1;
 
         #region Unity Callbacks
 
