@@ -177,7 +177,7 @@ namespace Mirror
                 // RecordObject needs to be called before we make the change
                 UnityEditor.Undo.RecordObject(gameObject, "Added default Transport");
 #endif
-                
+
                 transport = GetComponent<Transport>();
 
                 // was a transport added yet? if not, add one
